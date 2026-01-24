@@ -76,26 +76,30 @@ echo "Please edit it to add your API keys, then run the skill again."
 
 ## Research Execution
 
-**IMPORTANT: Run WebSearch FIRST, then the script.** This way users see our nice progress display as the "working state" while the slower script runs.
+**IMPORTANT: Run Reddit/X script IN BACKGROUND first, then WebSearch.** This way both run in parallel.
 
-**Step 1: Kick off WebSearch** (runs quickly)
+**Step 1: Start Reddit/X script in background** (runs first, shows progress)
+```bash
+python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
+```
+Use `run_in_background: true` so it starts immediately and runs while we do WebSearch.
+
+The script displays progress:
+```
+🚀 Deploying research agents...
+├─ 🟠 Reddit Agent: Scanning subreddits for discussions...
+└─ 🔵 X Agent: Following the conversation on X...
+```
+
+**Step 2: While script runs, do WebSearch**
 - Search for: `{TOPIC} 2026` (or current year) - find 8-15 pages
 - Search for: `{TOPIC} best practices tutorial guide` - find 5-10 more
 - EXCLUDE reddit.com, x.com, twitter.com (covered by script)
 - INCLUDE: blogs, tutorials, docs, news, GitHub repos
 - **DO NOT output "Sources:" list** - this is noise, we'll show stats at the end
 
-**Step 2: Run the research script** (takes longer, shows progress)
-```bash
-python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
-```
-
-The script displays this progress while running:
-```
-🚀 Deploying research agents...
-├─ 🟠 Reddit Agent: Scanning subreddits for discussions...
-└─ 🔵 X Agent: Following the conversation on X...
-```
+**Step 3: Wait for background script to complete**
+Use TaskOutput to get the script results before proceeding to synthesis.
 
 **Depth options** (passed through from user's command):
 - `--quick` → Faster, fewer sources (8-12 each)
