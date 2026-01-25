@@ -72,6 +72,24 @@ def get_available_sources(config: Dict[str, Any]) -> str:
         return 'web'  # Fallback: WebSearch only (no API keys needed)
 
 
+def get_missing_keys(config: Dict[str, Any]) -> str:
+    """Determine which API keys are missing.
+
+    Returns: 'both', 'reddit', 'x', or 'none'
+    """
+    has_openai = bool(config.get('OPENAI_API_KEY'))
+    has_xai = bool(config.get('XAI_API_KEY'))
+
+    if has_openai and has_xai:
+        return 'none'
+    elif has_openai:
+        return 'x'  # Missing xAI key
+    elif has_xai:
+        return 'reddit'  # Missing OpenAI key
+    else:
+        return 'both'  # Missing both keys
+
+
 def validate_sources(requested: str, available: str, include_web: bool = False) -> tuple[str, Optional[str]]:
     """Validate requested sources against available keys.
 

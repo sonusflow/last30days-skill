@@ -72,6 +72,61 @@ PROCESSING_MESSAGES = [
     "Organizing findings...",
 ]
 
+WEB_ONLY_MESSAGES = [
+    "Searching the web...",
+    "Finding blogs and docs...",
+    "Crawling news sites...",
+    "Discovering tutorials...",
+]
+
+# Promo message for users without API keys
+PROMO_MESSAGE = f"""
+{Colors.YELLOW}{Colors.BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Colors.RESET}
+{Colors.YELLOW}⚡ UNLOCK THE FULL POWER OF /last30days{Colors.RESET}
+
+{Colors.DIM}Right now you're using web search only. Add API keys to unlock:{Colors.RESET}
+
+  {Colors.YELLOW}🟠 Reddit{Colors.RESET} - Real upvotes, comments, and community insights
+     └─ Add OPENAI_API_KEY (uses OpenAI's web_search for Reddit)
+
+  {Colors.CYAN}🔵 X (Twitter){Colors.RESET} - Real-time posts, likes, reposts from creators
+     └─ Add XAI_API_KEY (uses xAI's live X search)
+
+{Colors.DIM}Setup:{Colors.RESET} Edit {Colors.BOLD}~/.config/last30days/.env{Colors.RESET}
+{Colors.YELLOW}{Colors.BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{Colors.RESET}
+"""
+
+PROMO_MESSAGE_PLAIN = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ UNLOCK THE FULL POWER OF /last30days
+
+Right now you're using web search only. Add API keys to unlock:
+
+  🟠 Reddit - Real upvotes, comments, and community insights
+     └─ Add OPENAI_API_KEY (uses OpenAI's web_search for Reddit)
+
+  🔵 X (Twitter) - Real-time posts, likes, reposts from creators
+     └─ Add XAI_API_KEY (uses xAI's live X search)
+
+Setup: Edit ~/.config/last30days/.env
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+# Shorter promo for single missing key
+PROMO_SINGLE_KEY = {
+    "reddit": f"""
+{Colors.DIM}💡 Tip: Add {Colors.YELLOW}OPENAI_API_KEY{Colors.RESET}{Colors.DIM} to ~/.config/last30days/.env for Reddit data with real engagement metrics!{Colors.RESET}
+""",
+    "x": f"""
+{Colors.DIM}💡 Tip: Add {Colors.CYAN}XAI_API_KEY{Colors.RESET}{Colors.DIM} to ~/.config/last30days/.env for X/Twitter data with real likes & reposts!{Colors.RESET}
+""",
+}
+
+PROMO_SINGLE_KEY_PLAIN = {
+    "reddit": "\n💡 Tip: Add OPENAI_API_KEY to ~/.config/last30days/.env for Reddit data with real engagement metrics!\n",
+    "x": "\n💡 Tip: Add XAI_API_KEY to ~/.config/last30days/.env for X/Twitter data with real likes & reposts!\n",
+}
+
 # Spinner frames
 SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 DOTS_FRAMES = ['   ', '.  ', '.. ', '...']
@@ -212,6 +267,46 @@ class ProgressDisplay:
 
     def show_error(self, message: str):
         sys.stderr.write(f"{Colors.RED}✗ Error:{Colors.RESET} {message}\n")
+        sys.stderr.flush()
+
+    def start_web_only(self):
+        """Show web-only mode indicator."""
+        msg = random.choice(WEB_ONLY_MESSAGES)
+        self.spinner = Spinner(f"{Colors.GREEN}Web{Colors.RESET} {msg}", Colors.GREEN)
+        self.spinner.start()
+
+    def end_web_only(self):
+        """End web-only spinner."""
+        if self.spinner:
+            self.spinner.stop(f"{Colors.GREEN}Web{Colors.RESET} Claude will search the web")
+
+    def show_web_only_complete(self):
+        """Show completion for web-only mode."""
+        elapsed = time.time() - self.start_time
+        if IS_TTY:
+            sys.stderr.write(f"\n{Colors.GREEN}{Colors.BOLD}✓ Ready for web search{Colors.RESET} ")
+            sys.stderr.write(f"{Colors.DIM}({elapsed:.1f}s){Colors.RESET}\n")
+            sys.stderr.write(f"  {Colors.GREEN}Web:{Colors.RESET} Claude will search blogs, docs & news\n\n")
+        else:
+            sys.stderr.write(f"✓ Ready for web search ({elapsed:.1f}s)\n")
+        sys.stderr.flush()
+
+    def show_promo(self, missing: str = "both"):
+        """Show promotional message for missing API keys.
+
+        Args:
+            missing: 'both', 'reddit', or 'x' - which keys are missing
+        """
+        if missing == "both":
+            if IS_TTY:
+                sys.stderr.write(PROMO_MESSAGE)
+            else:
+                sys.stderr.write(PROMO_MESSAGE_PLAIN)
+        elif missing in PROMO_SINGLE_KEY:
+            if IS_TTY:
+                sys.stderr.write(PROMO_SINGLE_KEY[missing])
+            else:
+                sys.stderr.write(PROMO_SINGLE_KEY_PLAIN[missing])
         sys.stderr.flush()
 
 

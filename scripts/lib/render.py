@@ -14,12 +14,13 @@ def ensure_output_dir():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def render_compact(report: schema.Report, limit: int = 15) -> str:
+def render_compact(report: schema.Report, limit: int = 15, missing_keys: str = "none") -> str:
     """Render compact output for Claude to synthesize.
 
     Args:
         report: Report data
         limit: Max items per source
+        missing_keys: 'both', 'reddit', 'x', or 'none'
 
     Returns:
         Compact markdown string
@@ -29,6 +30,18 @@ def render_compact(report: schema.Report, limit: int = 15) -> str:
     # Header
     lines.append(f"## Research Results: {report.topic}")
     lines.append("")
+
+    # Web-only mode banner (when no API keys)
+    if report.mode == "web-only":
+        lines.append("**🌐 WEB SEARCH MODE** - Claude will search blogs, docs & news")
+        lines.append("")
+        lines.append("---")
+        lines.append("**⚡ Want better results?** Add API keys to unlock Reddit & X data:")
+        lines.append("- `OPENAI_API_KEY` → Reddit threads with real upvotes & comments")
+        lines.append("- `XAI_API_KEY` → X posts with real likes & reposts")
+        lines.append("- Edit `~/.config/last30days/.env` to add keys")
+        lines.append("---")
+        lines.append("")
 
     # Cache indicator
     if report.from_cache:
@@ -44,12 +57,12 @@ def render_compact(report: schema.Report, limit: int = 15) -> str:
         lines.append(f"**xAI Model:** {report.xai_model_used}")
     lines.append("")
 
-    # Coverage note
-    if report.mode == "reddit-only":
-        lines.append("*Tip: Add xAI key for X coverage and better triangulation.*")
+    # Coverage note for partial coverage
+    if report.mode == "reddit-only" and missing_keys == "x":
+        lines.append("*💡 Tip: Add XAI_API_KEY for X/Twitter data and better triangulation.*")
         lines.append("")
-    elif report.mode == "x-only":
-        lines.append("*Tip: Add OpenAI key for Reddit coverage and better triangulation.*")
+    elif report.mode == "x-only" and missing_keys == "reddit":
+        lines.append("*💡 Tip: Add OPENAI_API_KEY for Reddit data and better triangulation.*")
         lines.append("")
 
     # Reddit items

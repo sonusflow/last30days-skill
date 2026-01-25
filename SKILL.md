@@ -50,66 +50,64 @@ Common patterns:
 
 ## Setup Check
 
-Verify API key configuration exists:
+The skill works in three modes based on available API keys:
 
-```bash
-if [ ! -f ~/.config/last30days/.env ]; then
-  echo "SETUP_NEEDED"
-else
-  echo "CONFIGURED"
-fi
-```
+1. **Full Mode** (both keys): Reddit + X + WebSearch - best results with engagement metrics
+2. **Partial Mode** (one key): Reddit-only or X-only + WebSearch
+3. **Web-Only Mode** (no keys): WebSearch only - still useful, but no engagement metrics
 
-### If SETUP_NEEDED
+**API keys are OPTIONAL.** The skill will work without them using WebSearch fallback.
 
-Run NUX flow to configure API keys. Use AskUserQuestion to collect:
+### First-Time Setup (Optional but Recommended)
 
-1. **OpenAI API Key** (optional but recommended for Reddit research)
-2. **xAI API Key** (optional but recommended for X research)
-
-Then create the config:
+If the user wants to add API keys for better results:
 
 ```bash
 mkdir -p ~/.config/last30days
 cat > ~/.config/last30days/.env << 'ENVEOF'
 # last30days API Configuration
-# At least one key is required
+# Both keys are optional - skill works with WebSearch fallback
 
+# For Reddit research (uses OpenAI's web_search tool)
 OPENAI_API_KEY=
+
+# For X/Twitter research (uses xAI's x_search tool)
 XAI_API_KEY=
 ENVEOF
 
 chmod 600 ~/.config/last30days/.env
 echo "Config created at ~/.config/last30days/.env"
-echo "Please edit it to add your API keys, then run the skill again."
+echo "Edit to add your API keys for enhanced research."
 ```
 
-**STOP HERE if setup was needed.**
+**DO NOT stop if no keys are configured.** Proceed with web-only mode.
 
 ---
 
 ## Research Execution
 
-**IMPORTANT: Run Reddit/X script IN BACKGROUND first, then WebSearch.** This way both run in parallel.
+**IMPORTANT: The script handles API key detection automatically.** Run it and check the output to determine mode.
 
-**Step 1: Display the research banner immediately:**
-```
-🔍 Researching "{TOPIC}" across the last 30 days...
-
-🚀 Deploying research agents in parallel...
-├─ 🟠 Reddit Agent: Scanning subreddits for gold...
-├─ 🔵 X Agent: Catching the latest takes...
-├─ 🌐 Web Agent: Crawling blogs, docs & news...
-└─ ⚖️ Judge Agent: Standing by to synthesize...
-```
-
-**Step 2: Start Reddit/X script in background**
+**Step 1: Run the research script**
 ```bash
 python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
 ```
-Use `run_in_background: true` so it starts immediately and runs while we do WebSearch.
 
-**Step 2: While script runs, do WebSearch**
+The script will automatically:
+- Detect available API keys
+- Show a promo banner if keys are missing (this is intentional marketing)
+- Run Reddit/X searches if keys exist
+- Signal if WebSearch is needed
+
+**Step 2: Check the output mode**
+
+The script output will indicate the mode:
+- **"Mode: both"** or **"Mode: reddit-only"** or **"Mode: x-only"**: Script found results, WebSearch is supplementary
+- **"Mode: web-only"**: No API keys, Claude must do ALL research via WebSearch
+
+**Step 3: Do WebSearch**
+
+For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
 
 Choose search queries based on QUERY_TYPE:
 
@@ -240,6 +238,8 @@ KEY PATTERNS I'll use:
 ```
 
 **THEN - Stats (right before invitation):**
+
+For **full/partial mode** (has API keys):
 ```
 ---
 ✅ All agents reported back!
@@ -247,6 +247,18 @@ KEY PATTERNS I'll use:
 ├─ 🔵 X: {n} posts │ {sum} likes │ {sum} reposts
 ├─ 🌐 Web: {n} pages │ {domains}
 └─ Top voices: r/{sub1}, r/{sub2} │ @{handle1}, @{handle2} │ {web_author} on {site}
+```
+
+For **web-only mode** (no API keys):
+```
+---
+✅ Research complete!
+├─ 🌐 Web: {n} pages │ {domains}
+└─ Top sources: {author1} on {site1}, {author2} on {site2}
+
+💡 Want engagement metrics? Add API keys to ~/.config/last30days/.env
+   - OPENAI_API_KEY → Reddit (real upvotes & comments)
+   - XAI_API_KEY → X/Twitter (real likes & reposts)
 ```
 
 **LAST - Invitation:**
@@ -358,10 +370,22 @@ Only do new research if the user explicitly asks about a DIFFERENT topic.
 
 After delivering a prompt, end with:
 
+For **full/partial mode**:
 ```
 ---
 📚 Expert in: {TOPIC} for {TARGET_TOOL}
 📊 Based on: {n} Reddit threads ({sum} upvotes) + {n} X posts ({sum} likes) + {n} web pages
 
 Want another prompt? Just tell me what you're creating next.
+```
+
+For **web-only mode**:
+```
+---
+📚 Expert in: {TOPIC} for {TARGET_TOOL}
+📊 Based on: {n} web pages from {domains}
+
+Want another prompt? Just tell me what you're creating next.
+
+💡 Unlock Reddit & X data: Add API keys to ~/.config/last30days/.env
 ```

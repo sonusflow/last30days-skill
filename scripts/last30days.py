@@ -79,8 +79,15 @@ def run_research(
     reddit_error = None
     x_error = None
 
-    # Check if WebSearch is needed
+    # Check if WebSearch is needed (always needed in web-only mode)
     web_needed = sources in ("all", "web", "reddit-web", "x-web")
+
+    # Web-only mode: no API calls needed, Claude handles everything
+    if sources == "web":
+        if progress:
+            progress.start_web_only()
+            progress.end_web_only()
+        return reddit_items, x_items, True, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
 
     # Reddit search via OpenAI
     if sources in ("both", "reddit", "all", "reddit-web"):
@@ -263,8 +270,15 @@ def main():
     # Get date range
     from_date, to_date = dates.get_date_range(30)
 
+    # Check what keys are missing for promo messaging
+    missing_keys = env.get_missing_keys(config)
+
     # Initialize progress display
     progress = ui.ProgressDisplay(args.topic, show_banner=True)
+
+    # Show promo for missing keys BEFORE research
+    if missing_keys != 'none':
+        progress.show_promo(missing_keys)
 
     # Select models
     if args.mock:
@@ -361,10 +375,13 @@ def main():
     render.write_outputs(report, raw_openai, raw_xai, raw_reddit_enriched)
 
     # Show completion
-    progress.show_complete(len(deduped_reddit), len(deduped_x))
+    if sources == "web":
+        progress.show_web_only_complete()
+    else:
+        progress.show_complete(len(deduped_reddit), len(deduped_x))
 
     # Output result
-    output_result(report, args.emit, web_needed, args.topic, from_date, to_date)
+    output_result(report, args.emit, web_needed, args.topic, from_date, to_date, missing_keys)
 
 
 def output_result(
@@ -374,10 +391,11 @@ def output_result(
     topic: str = "",
     from_date: str = "",
     to_date: str = "",
+    missing_keys: str = "none",
 ):
     """Output the result based on emit mode."""
     if emit_mode == "compact":
-        print(render.render_compact(report))
+        print(render.render_compact(report, missing_keys=missing_keys))
     elif emit_mode == "json":
         print(json.dumps(report.to_dict(), indent=2))
     elif emit_mode == "md":
