@@ -17,6 +17,7 @@ mkdir -p ~/.config/last30days
 cat > ~/.config/last30days/.env << 'EOF'
 OPENAI_API_KEY=sk-...
 XAI_API_KEY=xai-...
+TAVILY_API_KEY=tvly-...
 EOF
 chmod 600 ~/.config/last30days/.env
 ```
@@ -702,6 +703,7 @@ This example shows /last30days discovering **emerging developer workflows** - re
 ## Requirements
 
 - **OpenAI API key** - For Reddit research (uses web search)
+- **Tavily API key** - Alternative for Reddit + Web research (recommended)
 - **xAI API key** - For X research (optional but recommended)
 
 At least one key is required.
@@ -710,6 +712,7 @@ At least one key is required.
 
 The skill uses:
 - OpenAI's Responses API with web search to find Reddit discussions
+- OR Tavily API to find Reddit discussions and broad web results
 - xAI's API with live X search to find posts
 - Real Reddit thread enrichment for engagement metrics
 - Scoring algorithm that weighs recency, relevance, and engagement

@@ -155,6 +155,56 @@ def normalize_x_items(
     return normalized
 
 
+    return normalized
+
+
+def normalize_web_items(
+    items: List[Dict[str, Any]],
+    from_date: str,
+    to_date: str,
+) -> List[schema.WebSearchItem]:
+    """Normalize raw web items to schema.
+
+    Args:
+        items: Raw web items from API
+        from_date: Start of date range
+        to_date: End of date range
+
+    Returns:
+        List of WebSearchItem objects
+    """
+    normalized = []
+
+    for i, item in enumerate(items):
+        # Extract domain
+        url = item.get("url", "")
+        domain = ""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace("www.", "")
+        except Exception:
+            pass
+
+        # Determine date confidence
+        date_str = item.get("date")
+        date_confidence = dates.get_date_confidence(date_str, from_date, to_date)
+
+        normalized.append(schema.WebSearchItem(
+            id=f"W{i+1}",
+            title=item.get("title", ""),
+            url=url,
+            source_domain=domain,
+            snippet=item.get("snippet", "") or item.get("content", "")[:300],
+            date=date_str,
+            date_confidence=date_confidence,
+            relevance=item.get("relevance", 0.5),
+            why_relevant=item.get("why_relevant", ""),
+        ))
+
+    return normalized
+
+
 def items_to_dicts(items: List) -> List[Dict[str, Any]]:
     """Convert schema items to dicts for JSON serialization."""
     return [item.to_dict() for item in items]

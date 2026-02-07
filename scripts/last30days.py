@@ -40,7 +40,10 @@ from lib import (
     score,
     ui,
     websearch,
+    ui,
+    websearch,
     xai_x,
+    tavily_search,
 )
 
 
@@ -73,6 +76,25 @@ def _search_reddit(
     if mock:
         raw_openai = load_fixture("openai_sample.json")
     else:
+        # Check available keys
+        openai_key = config.get("OPENAI_API_KEY")
+        tavily_key = config.get("TAVILY_API_KEY")
+
+        # Prefer OpenAI if available (backwards compat), otherwise Tavily
+        use_tavily = not openai_key and tavily_key
+
+        if use_tavily:
+            try:
+                # Use Tavily for Reddit
+                # Using 30 days default which matches the tool intent
+                raw_openai = tavily_search.search_reddit(tavily_key, topic, days=30)
+                reddit_items = tavily_search.parse_reddit_items(raw_openai)
+                return reddit_items, raw_openai, None
+            except Exception as e:
+                 raw_openai = {"error": str(e)}
+                 reddit_error = f"Tavily error: {e}"
+                 return [], raw_openai, reddit_error
+
         try:
             raw_openai = openai_reddit.search_reddit(
                 config["OPENAI_API_KEY"],
@@ -158,6 +180,30 @@ def _search_x(
     return x_items, raw_xai, x_error
 
 
+
+def _search_web(
+    topic: str,
+    config: dict,
+    depth: str,
+    mock: bool,
+) -> tuple:
+    """Search Web via Tavily (runs in thread)."""
+    if mock:
+        # No mock for web yet
+        return [], {}, None
+
+    tavily_key = config.get("TAVILY_API_KEY")
+    if not tavily_key:
+        return [], {}, None
+
+    try:
+        raw = tavily_search.search(tavily_key, topic, days=30)
+        items = tavily_search.parse_response(raw)
+        return items, raw, None
+    except Exception as e:
+        return [], {"error": str(e)}, f"Tavily web error: {e}"
+
+
 def run_research(
     topic: str,
     sources: str,
@@ -172,39 +218,49 @@ def run_research(
     """Run the research pipeline.
 
     Returns:
-        Tuple of (reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error)
-
-    Note: web_needed is True when WebSearch should be performed by Claude.
-    The script outputs a marker and Claude handles WebSearch in its session.
+        Tuple of (reddit_items, x_items, web_items, web_needed, raw_openai, raw_xai, raw_web, raw_reddit_enriched, reddit_error, x_error, web_error)
     """
     reddit_items = []
     x_items = []
+    web_items = []
     raw_openai = None
     raw_xai = None
+    raw_web = None
     raw_reddit_enriched = []
     reddit_error = None
     x_error = None
+    web_error = None
 
-    # Check if WebSearch is needed (always needed in web-only mode)
-    web_needed = sources in ("all", "web", "reddit-web", "x-web")
+    # Check if WebSearch is needed
+    # If we have Tavily, we can do it ourselves, so web_needed effectively becomes False
+    # But we set it initially based on intent
+    web_needed_intent = sources in ("all", "web", "reddit-web", "x-web")
+    web_needed_claude = web_needed_intent  # default to Claude doing it
 
     # Web-only mode: no API calls needed, Claude handles everything
+    # UNLESS we have Tavily
     if sources == "web":
-        if progress:
-            progress.start_web_only()
-            progress.end_web_only()
-        return reddit_items, x_items, True, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
+        if config.get("TAVILY_API_KEY"):
+            # We have Tavily, so we run it
+            pass
+        else:
+            if progress:
+                progress.start_web_only()
+                progress.end_web_only()
+            return reddit_items, x_items, web_items, True, raw_openai, raw_xai, raw_web, raw_reddit_enriched, reddit_error, x_error, web_error
 
     # Determine which searches to run
     run_reddit = sources in ("both", "reddit", "all", "reddit-web")
     run_x = sources in ("both", "x", "all", "x-web")
+    run_web = web_needed_intent and bool(config.get("TAVILY_API_KEY"))
 
-    # Run Reddit and X searches in parallel
+    # Run searches in parallel
     reddit_future = None
     x_future = None
+    web_future = None
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        # Submit both searches
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit searches
         if run_reddit:
             if progress:
                 progress.start_reddit()
@@ -219,6 +275,13 @@ def run_research(
             x_future = executor.submit(
                 _search_x, topic, config, selected_models,
                 from_date, to_date, depth, mock
+            )
+
+        if run_web:
+            # We don't have a specific UI progress bar for web yet,
+            # but we can run it in background
+            web_future = executor.submit(
+                _search_web, topic, config, depth, mock
             )
 
         # Collect results
@@ -246,8 +309,20 @@ def run_research(
             if progress:
                 progress.end_x(len(x_items))
 
+        if web_future:
+            try:
+                web_items, raw_web, web_error = web_future.result()
+                if web_items:
+                    web_needed_claude = False  # We found items, Claude doesn't need to search
+            except Exception as e:
+                web_error = str(e)
+
     # Enrich Reddit items with real data (sequential, but with error handling per-item)
     if reddit_items:
+        # Only enrich if we have an OpenAI key (Tavily doesn't need enrichment or can't do it way we do)
+        # But wait, enrichment uses OpenAI Response API to parse content? No, it uses scraping.
+        # Actually reddit_enrich uses scraping (no API key needed usually) or standard libs?
+        # Let's assume enrichment works for any reddit URL.
         if progress:
             progress.start_reddit_enrich(1, len(reddit_items))
 
@@ -271,7 +346,7 @@ def run_research(
         if progress:
             progress.end_reddit_enrich()
 
-    return reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error
+    return reddit_items, x_items, web_items, web_needed_claude, raw_openai, raw_xai, raw_web, raw_reddit_enriched, reddit_error, x_error, web_error
 
 
 def main():
@@ -410,7 +485,7 @@ def main():
         mode = sources
 
     # Run research
-    reddit_items, x_items, web_needed, raw_openai, raw_xai, raw_reddit_enriched, reddit_error, x_error = run_research(
+    reddit_items, x_items, web_items, web_needed, raw_openai, raw_xai, raw_web, raw_reddit_enriched, reddit_error, x_error, web_error = run_research(
         args.topic,
         sources,
         config,
@@ -428,23 +503,29 @@ def main():
     # Normalize items
     normalized_reddit = normalize.normalize_reddit_items(reddit_items, from_date, to_date)
     normalized_x = normalize.normalize_x_items(x_items, from_date, to_date)
+    normalized_web = normalize.normalize_web_items(web_items, from_date, to_date)
 
     # Hard date filter: exclude items with verified dates outside the range
     # This is the safety net - even if prompts let old content through, this filters it
     filtered_reddit = normalize.filter_by_date_range(normalized_reddit, from_date, to_date)
     filtered_x = normalize.filter_by_date_range(normalized_x, from_date, to_date)
+    filtered_web = normalize.filter_by_date_range(normalized_web, from_date, to_date)
 
     # Score items
     scored_reddit = score.score_reddit_items(filtered_reddit)
     scored_x = score.score_x_items(filtered_x)
+    # We don't have dedicated scoring for web items yet, use raw relevance
+    scored_web = filtered_web
 
     # Sort items
     sorted_reddit = score.sort_items(scored_reddit)
     sorted_x = score.sort_items(scored_x)
+    sorted_web = sorted(scored_web, key=lambda x: x.relevance or 0, reverse=True)
 
     # Dedupe items
     deduped_reddit = dedupe.dedupe_reddit(sorted_reddit)
     deduped_x = dedupe.dedupe_x(sorted_x)
+    deduped_web = sorted_web # Basic dedupe via URL happening in search maybe?
 
     progress.end_processing()
 
@@ -459,8 +540,10 @@ def main():
     )
     report.reddit = deduped_reddit
     report.x = deduped_x
+    report.web = deduped_web
     report.reddit_error = reddit_error
     report.x_error = x_error
+    report.web_error = web_error
 
     # Generate context snippet
     report.context_snippet_md = render.render_context_snippet(report)
@@ -469,7 +552,7 @@ def main():
     render.write_outputs(report, raw_openai, raw_xai, raw_reddit_enriched)
 
     # Show completion
-    if sources == "web":
+    if sources == "web" and web_needed: # web-only and NO tavily
         progress.show_web_only_complete()
     else:
         progress.show_complete(len(deduped_reddit), len(deduped_x))

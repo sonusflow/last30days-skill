@@ -73,6 +73,10 @@ OPENAI_API_KEY=
 
 # For X/Twitter research (uses xAI's x_search tool)
 XAI_API_KEY=
+
+# For Reddit + Web research (uses Tavily API)
+# Alternative to OPENAI_API_KEY + manual WebSearch
+TAVILY_API_KEY=
 ENVEOF
 
 chmod 600 ~/.config/last30days/.env
@@ -105,9 +109,19 @@ The script output will indicate the mode:
 - **"Mode: both"** or **"Mode: reddit-only"** or **"Mode: x-only"**: Script found results, WebSearch is supplementary
 - **"Mode: web-only"**: No API keys, Claude must do ALL research via WebSearch
 
-**Step 3: Do WebSearch**
+**Step 3: Do WebSearch (If Required)**
 
-For **ALL modes**, do WebSearch to supplement (or provide all data in web-only mode).
+The script may perform web search automatically if Tavily is configured.
+
+**IF the script output contains `### WEBSEARCH REQUIRED ###`:**
+- Browse to find 8-15 relevant web pages to supplement data.
+
+**IF the script output contains `## Web Results`:**
+- Use the provided web results.
+- Only do additional WebSearch if the provided results are sparse or irrelevant.
+- Go to Synthesis.
+
+When doing manual WebSearch (if required):
 
 Choose search queries based on QUERY_TYPE:
 
@@ -259,6 +273,7 @@ For **web-only mode** (no API keys):
 💡 Want engagement metrics? Add API keys to ~/.config/last30days/.env
    - OPENAI_API_KEY → Reddit (real upvotes & comments)
    - XAI_API_KEY → X/Twitter (real likes & reposts)
+   - TAVILY_API_KEY → Reddit + Web (automated deep search)
 ```
 
 **LAST - Invitation:**

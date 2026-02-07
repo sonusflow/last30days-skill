@@ -44,6 +44,7 @@ def get_config() -> Dict[str, Any]:
         'OPENAI_MODEL_PIN': os.environ.get('OPENAI_MODEL_PIN') or file_env.get('OPENAI_MODEL_PIN'),
         'XAI_MODEL_POLICY': os.environ.get('XAI_MODEL_POLICY') or file_env.get('XAI_MODEL_POLICY', 'latest'),
         'XAI_MODEL_PIN': os.environ.get('XAI_MODEL_PIN') or file_env.get('XAI_MODEL_PIN'),
+        'TAVILY_API_KEY': os.environ.get('TAVILY_API_KEY') or file_env.get('TAVILY_API_KEY'),
     }
 
     return config
@@ -60,11 +61,13 @@ def get_available_sources(config: Dict[str, Any]) -> str:
     Returns: 'both', 'reddit', 'x', or 'web' (fallback when no keys)
     """
     has_openai = bool(config.get('OPENAI_API_KEY'))
+    has_tavily = bool(config.get('TAVILY_API_KEY'))
+    has_reddit = has_openai or has_tavily
     has_xai = bool(config.get('XAI_API_KEY'))
 
-    if has_openai and has_xai:
+    if has_reddit and has_xai:
         return 'both'
-    elif has_openai:
+    elif has_reddit:
         return 'reddit'
     elif has_xai:
         return 'x'
@@ -78,14 +81,16 @@ def get_missing_keys(config: Dict[str, Any]) -> str:
     Returns: 'both', 'reddit', 'x', or 'none'
     """
     has_openai = bool(config.get('OPENAI_API_KEY'))
+    has_tavily = bool(config.get('TAVILY_API_KEY'))
+    has_reddit = has_openai or has_tavily
     has_xai = bool(config.get('XAI_API_KEY'))
 
-    if has_openai and has_xai:
+    if has_reddit and has_xai:
         return 'none'
-    elif has_openai:
+    elif has_reddit:
         return 'x'  # Missing xAI key
     elif has_xai:
-        return 'reddit'  # Missing OpenAI key
+        return 'reddit'  # Missing OpenAI/Tavily key
     else:
         return 'both'  # Missing both keys
 
